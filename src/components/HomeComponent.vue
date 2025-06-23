@@ -1,6 +1,6 @@
 <template>
   <div class="home-page container mt-5 pt-5">
-    <!-- Added Search Box -->
+    <!-- Search and Genre Filter Row -->
     <div class="row mb-4">
       <div class="col-md-6">
         <input 
@@ -11,7 +11,6 @@
         >
       </div>
       <div class="col-md-6">
-        <!-- Added Genre Filter -->
         <select v-model="selectedGenre" class="form-select">
           <option value="">All Genres</option>
           <option v-for="genre in genres" :key="genre.id" :value="genre.id">
@@ -23,7 +22,6 @@
 
     <h1 class="mb-4">Featured Movies</h1>
 
-    <!-- Modified to use filteredMovies -->
     <div v-if="filteredMovies.length" class="row row-cols-1 row-cols-md-3 g-4">
       <div v-for="movie in filteredMovies" :key="movie.id" class="col">
         <div class="card h-100">
@@ -36,7 +34,7 @@
           <div class="card-body">
             <h5 class="card-title">{{ movie.title }}</h5>
             
-            <!-- Added Rating Display -->
+            <!-- Rating Display -->
             <div class="rating mb-2">
               <span class="text-warning">★</span>
               <small>{{ movie.vote_average.toFixed(1) }} ({{ movie.vote_count }} votes)</small>
@@ -54,10 +52,9 @@
       </div>
     </div>
 
-    <!-- Rest of your existing template remains unchanged -->
     <div ref="loadMoreTrigger" class="text-center my-5">
       <div v-if="loading" class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading more...</span>
+        <span class="visually-hidden">Loading...</span>
       </div>
       <div v-else-if="!hasMore" class="text-muted">You've reached the end 🚀</div>
     </div>
@@ -75,9 +72,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
-// Your existing refs and functions remain exactly the same
+// Movie data and pagination
 const movies = ref([]);
 const page = ref(1);
 const loading = ref(false);
@@ -85,9 +82,11 @@ const hasMore = ref(true);
 const loadMoreTrigger = ref(null);
 const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 
-// New refs for search and genre filter
+// Search and Filter
 const searchQuery = ref('');
 const selectedGenre = ref('');
+
+// Genres list (Romance excluded)
 const genres = ref([
   { id: 28, name: 'Action' },
   { id: 12, name: 'Adventure' },
@@ -101,32 +100,33 @@ const genres = ref([
   { id: 27, name: 'Horror' },
   { id: 10402, name: 'Music' },
   { id: 9648, name: 'Mystery' },
-  { id: 10749, name: 'Romance' },
   { id: 878, name: 'Science Fiction' },
   { id: 53, name: 'Thriller' },
   { id: 10752, name: 'War' },
   { id: 37, name: 'Western' }
 ]);
 
-// Computed property for filtered movies
+// Filtered movies based on search and genre
 const filteredMovies = computed(() => {
   return movies.value.filter(movie => {
     const matchesSearch = movie.title.toLowerCase().includes(searchQuery.value.toLowerCase());
-    const matchesGenre = !selectedGenre.value || movie.genre_ids.includes(selectedGenre.value);
+    const matchesGenre = !selectedGenre.value || movie.genre_ids.includes(Number(selectedGenre.value));
     return matchesSearch && matchesGenre;
   });
 });
 
-// Your existing functions remain unchanged below
+// Image handling
 const getPosterUrl = (path) => {
-  if (!path) return 'https://via.placeholder.com/300x450?text=No+Poster';
-  return `https://image.tmdb.org/t/p/w500${path}`;
+  return path 
+    ? `https://image.tmdb.org/t/p/w500${path}`
+    : 'https://via.placeholder.com/300x450?text=No+Poster';
 };
 
 const setDefaultPoster = (event) => {
   event.target.src = 'https://via.placeholder.com/300x450?text=Poster+Not+Found';
 };
 
+// Fetch movies from TMDB
 const fetchMovies = async () => {
   if (loading.value || !hasMore.value) return;
 
@@ -137,35 +137,25 @@ const fetchMovies = async () => {
     );
     const data = await res.json();
 
-    if (data.results.length) {
-      movies.value.push(...data.results);
+    if (data.results?.length) {
+      movies.value = [...movies.value, ...data.results];
       page.value++;
-    }
-
-    if (page.value > data.total_pages) {
-      hasMore.value = false;
+      hasMore.value = page.value <= data.total_pages;
     }
   } catch (err) {
-    console.error("Error loading more movies:", err);
-    hasMore.value = false;
+    console.error("Error loading movies:", err);
   } finally {
     loading.value = false;
   }
 };
 
+// Infinite scroll setup
 const setupIntersectionObserver = () => {
   const observer = new IntersectionObserver(
-    (entries) => {
-      if (entries[0].isIntersecting && hasMore.value) {
-        fetchMovies();
-      }
-    },
-    { threshold: 1.0 }
+    (entries) => entries[0].isIntersecting && fetchMovies(),
+    { threshold: 0.1 }
   );
-
-  if (loadMoreTrigger.value) {
-    observer.observe(loadMoreTrigger.value);
-  }
+  if (loadMoreTrigger.value) observer.observe(loadMoreTrigger.value);
 };
 
 onMounted(() => {
@@ -179,5 +169,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+.card {
+  transition: transform 0.2s;
+}
+.card:hover {
+  transform: translateY(-5px);
 }
 </style>
